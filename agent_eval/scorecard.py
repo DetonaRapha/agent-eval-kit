@@ -10,6 +10,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from typing import Any
+
+# One per-item result row: heterogeneous by nature (scores are floats,
+# `question`/`rationale` are strings), so values are typed as Any.
+Row = dict[str, Any]
 
 # Keys used in each per-item row that are not 0..1 scores.
 LATENCY_KEY = "latency_ms"
@@ -29,7 +34,7 @@ class Scorecard:
         passed: True when every thresholded metric meets or exceeds its bar.
     """
 
-    per_item: list[dict] = field(default_factory=list)
+    per_item: list[Row] = field(default_factory=list)
     aggregate: dict[str, float] = field(default_factory=dict)
     thresholds: dict[str, float] = field(default_factory=dict)
     passed: bool = False
@@ -115,11 +120,7 @@ class Scorecard:
         if not self.per_item:
             return ["_No items._"]
 
-        score_keys = [
-            key
-            for key in self.per_item[0]
-            if key not in _NON_SCORE_KEYS
-        ]
+        score_keys = [key for key in self.per_item[0] if key not in _NON_SCORE_KEYS]
         header = ["#", "question", *score_keys, LATENCY_KEY]
         rows = ["| " + " | ".join(header) + " |", "| " + " | ".join(["---"] * len(header)) + " |"]
 

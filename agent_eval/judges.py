@@ -108,8 +108,7 @@ class MockJudge:
 
         # Relevance: does the answer track the question and its known answer?
         relevance = _clamp01(
-            0.5 * overlap_fraction(answer, question)
-            + 0.5 * overlap_fraction(answer, reference)
+            0.5 * overlap_fraction(answer, question) + 0.5 * overlap_fraction(answer, reference)
         )
 
         # Faithfulness: is the answer supported by what was retrieved?
@@ -120,7 +119,7 @@ class MockJudge:
 
         # Hallucination: fraction of the answer NOT anchored in any trusted
         # source. Trusted = retrieved contexts plus the reference.
-        trusted = list(contexts) + [reference]
+        trusted = [*contexts, reference]
         anchored = overlap_fraction(answer, trusted)
         not_hallucinated = _clamp01(anchored)
 
@@ -155,7 +154,8 @@ ANSWER on three axes, each a float from 0.0 to 1.0 where higher is better:
   invents facts. Judge against the CONTEXTS and the REFERENCE.
 
 Respond with ONLY a JSON object, no prose, no code fences, in exactly this shape:
-{"faithfulness": <float>, "relevance": <float>, "not_hallucinated": <float>, "rationale": "<one short sentence>"}
+{"faithfulness": <float>, "relevance": <float>, "not_hallucinated": <float>, \
+"rationale": "<one short sentence>"}
 """
 
 
@@ -204,9 +204,7 @@ class AnthropicJudge:
         return self._parse(text)
 
     @staticmethod
-    def _build_prompt(
-        question: str, answer: str, contexts: list[str], reference: str
-    ) -> str:
+    def _build_prompt(question: str, answer: str, contexts: list[str], reference: str) -> str:
         joined_contexts = "\n".join(f"- {c}" for c in contexts) if contexts else "(none)"
         return (
             f"QUESTION:\n{question}\n\n"

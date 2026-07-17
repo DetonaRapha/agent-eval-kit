@@ -24,7 +24,12 @@ dependencies = []
 [project.optional-dependencies]
 # The real Claude judge is opt-in so the SDK is never a required dependency.
 anthropic = ["anthropic>=0.40"]
-dev = ["pytest>=7.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
 
 [project.scripts]
 agent-eval = "agent_eval.cli:main"
@@ -37,4 +42,41 @@ packages = ["agent_eval"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# Default run stays offline and fast: integration tests are opt-in via `-m`.
+addopts = "-ra -m 'not integration'"
+markers = [
+    "integration: makes real network calls; needs ANTHROPIC_API_KEY (opt-in via `pytest -m integration`)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["out"]
+
+[tool.ruff.lint]
+# A pragmatic, high-signal rule set: pyflakes/pycodestyle, imports, pyupgrade,
+# bugbear, simplify, and ruff's own checks.
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["agent_eval"]
+# The anthropic SDK is an optional extra; don't fail typing when it's absent.
+[[tool.mypy.overrides]]
+module = ["anthropic", "anthropic.*"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["agent_eval"]
+branch = true
+# __main__.py is a 3-line `python -m agent_eval` shim exercised via the CLI.
+omit = ["agent_eval/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

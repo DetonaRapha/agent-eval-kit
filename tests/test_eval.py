@@ -15,9 +15,8 @@ import pytest
 
 from agent_eval import cli
 from agent_eval.datasets import DatasetError, Example, load_golden
-from agent_eval.judges import MockJudge
+from agent_eval.judges import JUDGE_METRICS, MockJudge
 from agent_eval.metrics import DETERMINISTIC_METRICS
-from agent_eval.judges import JUDGE_METRICS
 from agent_eval.runner import evaluate
 from agent_eval.sut import SUTResult
 
@@ -57,7 +56,7 @@ def sleep_example() -> Example:
 
 def test_load_golden_reads_all_examples():
     dataset = load_golden(GOLDEN)
-    assert len(dataset) == 6
+    assert len(dataset) == 12
     assert all(isinstance(ex, Example) for ex in dataset)
     assert all(ex.question and ex.reference for ex in dataset)
 
@@ -65,10 +64,7 @@ def test_load_golden_reads_all_examples():
 def test_load_golden_skips_blank_lines(tmp_path: Path):
     path = tmp_path / "d.jsonl"
     path.write_text(
-        '{"question": "q1", "reference": "r1"}\n'
-        "\n"
-        '   \n'
-        '{"question": "q2", "reference": "r2"}\n',
+        '{"question": "q1", "reference": "r1"}\n\n   \n{"question": "q2", "reference": "r2"}\n',
         encoding="utf-8",
     )
     assert len(load_golden(str(path))) == 2
@@ -133,6 +129,23 @@ def test_offtopic_item_scores_lower_than_ontopic():
     offtopic = next(q for q in relevance_by_q if "vitamin d" in q.lower())
 
     assert relevance_by_q[offtopic] < relevance_by_q[ontopic]
+
+
+def test_better_rag_outscores_tiny_rag():
+    """The whole point of the kit: tell two systems apart. The less-naive
+    ``better_rag`` — which uses content-word retrieval and declines out-of-domain
+    questions instead of guessing — must beat ``tiny_rag`` on aggregate
+    relevance. Deterministic (MockJudge), so this is a stable regression guard."""
+    from examples.better_rag import answer as better_rag
+    from examples.tiny_rag import answer as tiny_rag
+
+    dataset = load_golden(GOLDEN)
+    judge = MockJudge()
+
+    tiny = evaluate(tiny_rag, dataset, judge, thresholds={})
+    better = evaluate(better_rag, dataset, judge, thresholds={})
+
+    assert better.aggregate["relevance"] > tiny.aggregate["relevance"]
 
 
 # --- Test 3: threshold pass/fail logic ---------------------------------------
@@ -266,7 +279,8 @@ def test_anthropic_judge_raises_on_garbage():
 
 def test_scorecard_json_roundtrips():
     dataset = load_golden(GOLDEN)
-    card = evaluate(_good_sut, dataset, MockJudge(), thresholds={"relevance": 0.1})
+    # threshold 0.0 always clears, so this test isolates JSON structure, not the verdict.
+    card = evaluate(_good_sut, dataset, MockJudge(), thresholds={"relevance": 0.0})
     payload = json.loads(card.to_json())
     assert payload["passed"] is True
     assert "aggregate" in payload and "per_item" in payload
@@ -318,7 +332,5 @@ def test_cli_fails_run_when_thresholds_not_met():
 
 
 def test_cli_reports_bad_sut_spec():
-    exit_code = cli.main(
-        ["--dataset", GOLDEN, "--sut", "not_a_module:nope"]
-    )
+    exit_code = cli.main(["--dataset", GOLDEN, "--sut", "not_a_module:nope"])
     assert exit_code == 2

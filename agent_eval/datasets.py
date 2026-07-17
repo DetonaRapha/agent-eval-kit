@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -94,14 +95,14 @@ def _parse_record(record: object, path: str, lineno: int) -> Example:
     )
 
 
-def _require_nonempty_str(record: dict, key: str, where: str) -> str:
+def _require_nonempty_str(record: dict[str, Any], key: str, where: str) -> str:
     value = record.get(key)
     if not isinstance(value, str) or not value.strip():
         raise DatasetError(f"{where}: field '{key}' is required and must be a non-empty string")
     return value
 
 
-def _optional_str_list(record: dict, key: str, where: str) -> list[str]:
+def _optional_str_list(record: dict[str, Any], key: str, where: str) -> list[str]:
     value = record.get(key, [])
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise DatasetError(f"{where}: field '{key}' must be a list of strings")

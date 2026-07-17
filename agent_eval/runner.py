@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from agent_eval import metrics as m
 from agent_eval.datasets import Example
 from agent_eval.judges import Judge
-from agent_eval.scorecard import LATENCY_KEY, Scorecard
+from agent_eval.scorecard import LATENCY_KEY, Row, Scorecard
 from agent_eval.sut import SUT
 
 # Deterministic metric functions, keyed by the name they report under.
@@ -61,11 +61,11 @@ def evaluate(
     )
 
 
-def _evaluate_one(sut: SUT, judge: Judge, example: Example) -> dict:
+def _evaluate_one(sut: SUT, judge: Judge, example: Example) -> Row:
     """Evaluate a single example into one per-item row."""
     result = sut(example.question)
 
-    row: dict[str, object] = {"question": example.question}
+    row: Row = {"question": example.question}
 
     for name, fn in _DETERMINISTIC.items():
         row[name] = fn(result, example)
@@ -83,7 +83,7 @@ def _evaluate_one(sut: SUT, judge: Judge, example: Example) -> dict:
     return row
 
 
-def _aggregate(per_item: list[dict]) -> dict[str, float]:
+def _aggregate(per_item: list[Row]) -> dict[str, float]:
     """Mean of every numeric 0..1 metric across items.
 
     Latency is excluded from the 0..1 aggregate and averaged separately so it
@@ -95,17 +95,13 @@ def _aggregate(per_item: list[dict]) -> dict[str, float]:
     score_keys = [
         key
         for key, value in per_item[0].items()
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-        and key != LATENCY_KEY
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and key != LATENCY_KEY
     ]
 
     aggregate = {
-        key: sum(float(item[key]) for item in per_item) / len(per_item)
-        for key in score_keys
+        key: sum(float(item[key]) for item in per_item) / len(per_item) for key in score_keys
     }
-    aggregate[LATENCY_KEY] = sum(
-        float(item[LATENCY_KEY]) for item in per_item
-    ) / len(per_item)
+    aggregate[LATENCY_KEY] = sum(float(item[LATENCY_KEY]) for item in per_item) / len(per_item)
     return aggregate
 
 
@@ -115,7 +111,4 @@ def _verdict(aggregate: Mapping[str, float], thresholds: Mapping[str, float]) ->
     An empty threshold set means "report only": the run passes. A threshold on a
     metric that was never produced fails safe (treated as 0.0).
     """
-    return all(
-        aggregate.get(metric, 0.0) >= minimum
-        for metric, minimum in thresholds.items()
-    )
+    return all(aggregate.get(metric, 0.0) >= minimum for metric, minimum in thresholds.items())
