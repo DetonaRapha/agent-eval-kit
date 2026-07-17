@@ -13,6 +13,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 from agent_eval.datasets import DatasetError, load_golden
 from agent_eval.judges import JUDGE_METRICS, make_judge
@@ -158,7 +159,8 @@ def _import_sut(spec: str) -> SUT:
     candidate = getattr(module, attr)
     if not callable(candidate):
         raise ValueError(f"{spec!r} is not callable")
-    return candidate
+    # The kit trusts the SUT contract structurally; the caller owns correctness.
+    return cast("SUT", candidate)
 
 
 def _resolve_thresholds(overrides: list[str], no_defaults: bool) -> dict[str, float]:

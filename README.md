@@ -1,5 +1,10 @@
 # agent-eval-kit
 
+[![CI](https://github.com/DetonaRapha/agent-eval-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/DetonaRapha/agent-eval-kit/actions/workflows/ci.yml)
+![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-brightgreen)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 Aponte para qualquer coisa que responde uma pergunta — um RAG, um agente, uma
 chamada pura de LLM — e receba de volta um **scorecard de qualidade**
 (faithfulness, relevância, detecção de alucinação, mais métricas
@@ -88,24 +93,52 @@ métricas determinísticas ao lado do juiz.
 Uma rodada contra o SUT `examples/tiny_rag`, propositalmente ingênuo:
 
 ```
-Scorecard - PASS (6 example(s))
+Scorecard - PASS (12 example(s))
 ------------------------------------------------
   faithfulness            1.000   >= 0.250  [ok ]
   keyword_recall          0.667   >= 0.400  [ok ]
   not_hallucinated        1.000   >= 0.250  [ok ]
-  relevance               0.436   >= 0.250  [ok ]
-  exact_match             0.333   (no threshold)
+  relevance               0.412   >= 0.250  [ok ]
+  exact_match             0.167   (no threshold)
   groundedness_proxy      1.000   (no threshold)
   latency_ms              0.000   (no threshold)
 ------------------------------------------------
 ```
 
 O SUT de exemplo é um "RAG" de sobreposição de palavras-chave que papagaia o
-documento mais parecido. Ele é medíocre **de propósito**: repare que ele tira
-`relevance` 0,68 na pergunta sobre sono, que consegue responder, mas `0,00` na
-pergunta sobre vitamina D, fora da sua base de conhecimento. Essa queda
-localizada é o eval pegando uma fraqueza — um SUT perfeito não provaria nada
-sobre o kit.
+documento mais parecido. Ele é medíocre **de propósito**: em perguntas fora da
+base de conhecimento (vitamina D, antibiótico, capital da França) ele devolve
+com confiança um documento irrelevante, e o `relevance` despenca nesses itens.
+Essa queda localizada é o eval pegando uma fraqueza — um SUT perfeito não
+provaria nada sobre o kit.
+
+### Comparando dois sistemas
+
+O verdadeiro valor do kit é **distinguir sistemas na mesma régua**. O
+`examples/better_rag` é uma versão menos ingênua: recupera por palavras de
+conteúdo e **admite quando a pergunta está fora do domínio** em vez de chutar.
+Rode a comparação:
+
+```bash
+python -m examples.compare
+```
+
+```
+metric                    tiny_rag    better_rag
+------------------------------------------------
+exact_match                  0.167         0.167
+keyword_recall               0.667         0.750
+groundedness_proxy           1.000         0.833
+faithfulness                 1.000         0.938
+relevance                    0.412         0.464
+not_hallucinated             1.000         0.938
+```
+
+O `better_rag` ganha em `relevance` e `keyword_recall` — recupera melhor e não
+inventa resposta fora do domínio. Em troca, cai um pouco em `groundedness` e
+`faithfulness`: ao declinar honestamente, ele responde sem contextos, então
+esses itens não têm o que "sustentar". É um tradeoff real, e o scorecard o
+expõe — que é exatamente o trabalho de um kit de avaliação.
 
 ## Futuro (fora do escopo da v0, de propósito)
 
@@ -121,12 +154,28 @@ A v0 é a menor fatia completa que roda ponta a ponta. Adiado deliberadamente:
 
 ```bash
 pip install -e ".[dev]"
-pytest
+
+pytest                      # testes (offline, no juiz mock)
+ruff check .                # lint
+ruff format --check .       # formatação
+mypy agent_eval             # checagem de tipos (strict)
+pytest --cov=agent_eval     # cobertura (piso de 85% no CI)
 ```
 
 A suíte de testes roda inteiramente no juiz mock — sem rede, sem key — e o teste
 mais importante garante que um SUT sabidamente ruim tira nota *menor* que um
 decente. Se o eval não distingue bom de ruim, não é eval.
+
+Os testes de integração que chamam o Claude de verdade são **opt-in** e ficam
+fora do run padrão. Com uma key no ambiente:
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
+pytest -m integration
+```
+
+Sem a key, eles são pulados — o CI continua offline e verde. Lint, tipos e o piso
+de cobertura são aplicados como gate no CI.
 
 ## Licença
 

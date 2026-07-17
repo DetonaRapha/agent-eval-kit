@@ -15,11 +15,61 @@ from collections.abc import Iterable
 # A small, opinionated English stopword set. Kept tiny on purpose: content-word
 # overlap is a cheap proxy, and an aggressive list would hide real signal.
 _STOPWORDS: frozenset[str] = frozenset(
-    """
-    a an the and or but if then else of to in on at by for with without from as
-    is are was were be been being do does did have has had this that these those
-    it its i you he she they we me my your our their them his her
-    """.split()
+    [
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "if",
+        "then",
+        "else",
+        "of",
+        "to",
+        "in",
+        "on",
+        "at",
+        "by",
+        "for",
+        "with",
+        "without",
+        "from",
+        "as",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "do",
+        "does",
+        "did",
+        "have",
+        "has",
+        "had",
+        "this",
+        "that",
+        "these",
+        "those",
+        "it",
+        "its",
+        "i",
+        "you",
+        "he",
+        "she",
+        "they",
+        "we",
+        "me",
+        "my",
+        "your",
+        "our",
+        "their",
+        "them",
+        "his",
+        "her",
+    ]
 )
 
 _PUNCT_TABLE = str.maketrans("", "", string.punctuation)
