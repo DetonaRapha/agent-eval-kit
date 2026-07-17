@@ -57,7 +57,7 @@ em caso de aprovação / `1` em caso de reprovação — pronto para CI.
 
 ### Ligar um juiz LLM de verdade (opcional)
 
-O kit traz dois provedores opt-in, cada um atrás do seu extra e com import lazy:
+O kit traz três provedores opt-in, cada um atrás do seu extra e com import lazy:
 
 ```bash
 # Claude (Anthropic)
@@ -71,11 +71,17 @@ pip install "agent-eval-kit[openai]"
 export OPENAI_API_KEY=sk-...
 python -m agent_eval --dataset examples/golden.jsonl \
   --sut examples.tiny_rag:answer --judge openai
+
+# Google Gemini
+pip install "agent-eval-kit[google]"
+export GOOGLE_API_KEY=...
+python -m agent_eval --dataset examples/golden.jsonl \
+  --sut examples.tiny_rag:answer --judge gemini
 ```
 
-O modelo tem como padrão um modelo Claude atual e é sobrescrevível com
-`AGENT_EVAL_JUDGE_MODEL`. O SDK `anthropic` é um extra opcional — nunca é
-necessário para rodar o kit.
+O modelo tem um default sensato por provedor, sobrescrevível com
+`AGENT_EVAL_JUDGE_MODEL`. Os SDKs são extras opcionais — nenhum é necessário para
+rodar o kit no modo mock.
 
 ## Métricas
 
@@ -172,14 +178,37 @@ python -m agent_eval --dataset examples/golden.jsonl --sut m:f \
 Com `--report DIR`, além de `report.md` e `report.json`, é gerado um
 `report.html` autocontido (abre em qualquer navegador, sem servidor).
 
+### Persistência em SQLite e dashboard multi-rodada
+
+```bash
+# Persistir rodadas num banco SQLite (stdlib, sem dependência)
+python -m agent_eval --dataset examples/golden.jsonl --sut m:f \
+  --save-run-db runs.db --run-name nightly
+
+# Gerar um dashboard HTML estático comparando todas as rodadas salvas em runs/
+python -m agent_eval.dashboard runs/ -o dashboard.html
+```
+
+### Importar datasets de outros formatos
+
+Os adapters convertem records ou CSV externos (benchmarks, datasets internos)
+para o formato do kit, sem acoplar a nenhum benchmark específico:
+
+```python
+from agent_eval import from_records, from_csv
+
+examples = from_records(meus_registros, question_key="q", reference_key="a")
+examples = from_csv("benchmark.csv", must_include_key="keywords")
+```
+
 ## Futuro
 
-Ainda deliberadamente fora do escopo:
+Ainda deliberadamente fora do escopo (seriam outra aplicação, não este pacote):
 
-- Dashboard web completo (o `report.html` cobre o caso simples).
-- Persistência em banco de dados (hoje é arquivo JSON versionado).
-- Benchmarks públicos como adaptadores de dataset.
-- Outros provedores de LLM além de Anthropic e OpenAI.
+- Serviço web hospedado / dashboard interativo com backend (o `report.html` e o
+  dashboard estático cobrem os casos comuns, sem servidor).
+- Banco de dados cliente-servidor (Postgres etc.); hoje a persistência é arquivo
+  JSON versionado ou SQLite local.
 
 ## Desenvolvimento
 

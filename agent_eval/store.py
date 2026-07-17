@@ -9,6 +9,7 @@ check into a regression guard.
 from __future__ import annotations
 
 import json
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,6 +47,51 @@ def load_run(path: str) -> dict[str, float]:
     if not isinstance(aggregate, dict):
         raise ValueError(f"{path}: run file has no 'aggregate' section")
     return {str(k): float(v) for k, v in aggregate.items()}
+
+
+def save_run_sqlite(scorecard: Scorecard, db_path: str, name: str) -> None:
+    """Persist a run into a SQLite database (stdlib ``sqlite3``, no dependency).
+
+    A file-based JSON run is fine for a couple of comparisons; once many runs
+    accumulate, a small local database queries better. Rows are keyed by ``name``
+    (re-saving the same name overwrites it). This is "database persistence"
+    without adding a heavyweight dependency to the core.
+    """
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS runs "
+            "(name TEXT PRIMARY KEY, passed INTEGER NOT NULL, aggregate TEXT NOT NULL)"
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO runs (name, passed, aggregate) VALUES (?, ?, ?)",
+            (name, int(scorecard.passed), json.dumps(scorecard.aggregate)),
+        )
+
+
+def load_run_sqlite(db_path: str, name: str) -> dict[str, float]:
+    """Load a saved run's aggregate metrics from a SQLite database.
+
+    Raises:
+        KeyError: If no run with ``name`` exists.
+        FileNotFoundError: If the database file does not exist.
+    """
+    if not Path(db_path).exists():
+        raise FileNotFoundError(db_path)
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute("SELECT aggregate FROM runs WHERE name = ?", (name,)).fetchone()
+    if row is None:
+        raise KeyError(f"no run named {name!r} in {db_path}")
+    return {str(k): float(v) for k, v in json.loads(row[0]).items()}
+
+
+def list_runs_sqlite(db_path: str) -> list[tuple[str, bool]]:
+    """Return ``(name, passed)`` for every run in the database, newest last."""
+    if not Path(db_path).exists():
+        return []
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute("SELECT name, passed FROM runs ORDER BY rowid").fetchall()
+    return [(str(name), bool(passed)) for name, passed in rows]
 
 
 @dataclass(frozen=True)

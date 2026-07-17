@@ -7,9 +7,16 @@ projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
-Trabalho em andamento na Trilha B do roadmap (adicionado conforme entra):
-provedores de juiz adicionais, persistência de rodadas, suporte a datasets
-grandes, concorrência/cache e relatório HTML.
+### Adicionado
+
+- **Trilha B**: `OpenAIJudge` e `GeminiJudge` (provedores opt-in, import lazy);
+  persistência de rodadas (`--save-run`/`--baseline`) com detecção de regressão;
+  datasets grandes (`--limit`/`--sample`/`iter_golden`); concorrência
+  (`--concurrency`) e cache de juiz (`--cache`); relatório HTML autocontido.
+- **Persistência em SQLite** (stdlib) via `--save-run-db` e a API `*_sqlite`.
+- **Dashboard estático multi-rodada** (`python -m agent_eval.dashboard`).
+- **Adapters de dataset** (`from_records`, `from_csv`) para importar formatos
+  externos sem acoplar a nenhum benchmark.
 
 ## [0.1.0] - 2026-07-16
 
