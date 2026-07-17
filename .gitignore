@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Specs are kept local only, never pushed to the remote (team policy).
+agent-eval-kit-SPEC*.md
+
 # Reports produced by runs
 out/
 *.report.md
