@@ -10,11 +10,25 @@ dependencies via a deterministic mock judge; the real Claude judge is opt-in.
 
 from __future__ import annotations
 
-from agent_eval.datasets import Example, load_golden
-from agent_eval.judges import AnthropicJudge, Judge, JudgeScores, MockJudge, OpenAIJudge
+from agent_eval.adapters import from_csv, from_records
+from agent_eval.datasets import Example, iter_golden, load_golden, sample_dataset
+from agent_eval.judges import (
+    AnthropicJudge,
+    GeminiJudge,
+    Judge,
+    JudgeScores,
+    MockJudge,
+    OpenAIJudge,
+)
 from agent_eval.runner import evaluate
 from agent_eval.scorecard import Scorecard
-from agent_eval.store import compare_runs, load_run, save_run
+from agent_eval.store import (
+    compare_runs,
+    load_run,
+    load_run_sqlite,
+    save_run,
+    save_run_sqlite,
+)
 from agent_eval.sut import SUT, SUTResult
 
 __version__ = "0.1.0"
@@ -23,6 +37,7 @@ __all__ = [
     "SUT",
     "AnthropicJudge",
     "Example",
+    "GeminiJudge",
     "Judge",
     "JudgeScores",
     "MockJudge",
@@ -32,7 +47,13 @@ __all__ = [
     "__version__",
     "compare_runs",
     "evaluate",
+    "from_csv",
+    "from_records",
+    "iter_golden",
     "load_golden",
     "load_run",
+    "load_run_sqlite",
+    "sample_dataset",
     "save_run",
+    "save_run_sqlite",
 ]

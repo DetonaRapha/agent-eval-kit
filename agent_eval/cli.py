@@ -21,7 +21,7 @@ from agent_eval.judges import JUDGE_METRICS, JUDGE_NAMES, make_judge
 from agent_eval.metrics import DETERMINISTIC_METRICS
 from agent_eval.runner import evaluate
 from agent_eval.scorecard import Scorecard
-from agent_eval.store import compare_runs, load_run, save_run
+from agent_eval.store import compare_runs, load_run, save_run, save_run_sqlite
 from agent_eval.sut import SUT
 
 # Default pass bar per metric. Deliberately modest: the point of v0 is to show
@@ -128,7 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--run-name",
         metavar="NAME",
-        help="filename (without extension) for --save-run (default: UTC timestamp).",
+        help="name for --save-run / --save-run-db (default: UTC timestamp).",
+    )
+    parser.add_argument(
+        "--save-run-db",
+        metavar="PATH",
+        help="persist this run into a SQLite database at PATH (keyed by --run-name).",
     )
     parser.add_argument(
         "--baseline",
@@ -186,8 +191,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.report:
         _write_reports(scorecard, args.report)
-    if args.save_run:
-        _save_run(scorecard, args.save_run, args.run_name)
+    if args.save_run or args.save_run_db:
+        _save_run(scorecard, args.save_run, args.save_run_db, args.run_name)
 
     _print_failures(scorecard)
 
@@ -253,11 +258,17 @@ def _write_reports(scorecard: Scorecard, report_dir: str) -> None:
         print(f"\nwrote {path}" if filename.endswith(".md") else f"wrote {path}")
 
 
-def _save_run(scorecard: Scorecard, directory: str, run_name: str | None) -> None:
-    """Persist the run's scorecard for later baseline comparison."""
+def _save_run(
+    scorecard: Scorecard, directory: str | None, db_path: str | None, run_name: str | None
+) -> None:
+    """Persist the run's scorecard as a JSON file and/or into a SQLite database."""
     name = run_name or datetime.now(timezone.utc).strftime("run-%Y%m%dT%H%M%SZ")
-    path = save_run(scorecard, directory, name)
-    print(f"saved run to {path}")
+    if directory:
+        path = save_run(scorecard, directory, name)
+        print(f"saved run to {path}")
+    if db_path:
+        save_run_sqlite(scorecard, db_path, name)
+        print(f"saved run '{name}' to {db_path}")
 
 
 def _print_failures(scorecard: Scorecard) -> None:

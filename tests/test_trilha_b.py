@@ -72,7 +72,7 @@ def test_make_judge_supports_openai_and_rejects_unknown():
     assert isinstance(make_judge("openai"), OpenAIJudge)
     assert isinstance(make_judge("mock"), MockJudge)
     with pytest.raises(ValueError, match="unknown judge"):
-        make_judge("gemini")
+        make_judge("cohere")
 
 
 # --- B4: CachingJudge --------------------------------------------------------

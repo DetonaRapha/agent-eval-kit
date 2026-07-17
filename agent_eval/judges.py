@@ -255,6 +255,54 @@ class OpenAIJudge:
         return _parse_judge_scores(text)
 
 
+# Default Gemini model for the real judge. Overridable via the same env var.
+_DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+
+
+class GeminiJudge:
+    """LLM-as-judge backed by Google Gemini. Opt-in; SDK imported lazily.
+
+    Mirrors the other real judges: same rubric, same JSON contract, same parsing.
+    Requires ``GOOGLE_API_KEY`` and the ``google`` extra
+    (``pip install agent-eval-kit[google]``). The model is read from
+    ``AGENT_EVAL_JUDGE_MODEL``, defaulting to a small current model.
+    """
+
+    def __init__(self, model: str | None = None, client: object | None = None) -> None:
+        self.model = model or os.environ.get(_MODEL_ENV_VAR, _DEFAULT_GEMINI_MODEL)
+        self._client = client  # injectable for testing; otherwise built lazily
+
+    def _get_client(self) -> object:
+        if self._client is None:
+            try:
+                import google.generativeai as genai
+            except ImportError as exc:  # pragma: no cover - depends on optional extra
+                raise RuntimeError(
+                    "GeminiJudge requires the 'google-generativeai' package. Install it with "
+                    "`pip install agent-eval-kit[google]`, or use the default mock judge."
+                ) from exc
+            genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+            self._client = genai.GenerativeModel(self.model, system_instruction=_RUBRIC)
+        return self._client
+
+    def score(
+        self,
+        question: str,
+        answer: str,
+        contexts: list[str],
+        reference: str,
+    ) -> JudgeScores:
+        client = self._get_client()
+        prompt = _build_judge_prompt(question, answer, contexts, reference)
+        response = client.generate_content(prompt)  # type: ignore[attr-defined]
+        return _parse_judge_scores(_extract_gemini_text(response))
+
+
+def _extract_gemini_text(response: object) -> str:
+    """Pull the text out of a Gemini generate_content response."""
+    return str(getattr(response, "text", "") or "").strip()
+
+
 def _build_judge_prompt(question: str, answer: str, contexts: list[str], reference: str) -> str:
     """Assemble the user-facing prompt shared by every LLM judge."""
     joined_contexts = "\n".join(f"- {c}" for c in contexts) if contexts else "(none)"
@@ -349,16 +397,21 @@ class CachingJudge:
 
 
 #: Judge names accepted by :func:`make_judge` and the CLI.
-JUDGE_NAMES: tuple[str, ...] = ("mock", "anthropic", "openai")
+JUDGE_NAMES: tuple[str, ...] = ("mock", "anthropic", "openai", "gemini")
+
+# Judge classes keyed by CLI name (mock and real providers alike).
+_JUDGE_FACTORIES: dict[str, type[Judge]] = {
+    "mock": MockJudge,
+    "anthropic": AnthropicJudge,
+    "openai": OpenAIJudge,
+    "gemini": GeminiJudge,
+}
 
 
 def make_judge(name: str) -> Judge:
-    """Factory: build a judge by name (``"mock"``, ``"anthropic"``, ``"openai"``)."""
+    """Factory: build a judge by name (see :data:`JUDGE_NAMES`)."""
     normalized = name.strip().casefold()
-    if normalized == "mock":
-        return MockJudge()
-    if normalized == "anthropic":
-        return AnthropicJudge()
-    if normalized == "openai":
-        return OpenAIJudge()
-    raise ValueError(f"unknown judge {name!r}; expected one of {', '.join(JUDGE_NAMES)}")
+    factory = _JUDGE_FACTORIES.get(normalized)
+    if factory is None:
+        raise ValueError(f"unknown judge {name!r}; expected one of {', '.join(JUDGE_NAMES)}")
+    return factory()
