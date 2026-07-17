@@ -8,6 +8,8 @@ measured against.
 from __future__ import annotations
 
 import json
+import random
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -36,26 +38,19 @@ class DatasetError(ValueError):
     """Raised when a golden dataset is malformed."""
 
 
-def load_golden(path: str) -> list[Example]:
-    """Load a golden dataset from a JSONL file.
+def iter_golden(path: str) -> Iterator[Example]:
+    """Yield examples from a JSONL dataset one at a time (streaming).
 
-    Reads line by line, skipping blank lines. Each non-blank line must be a JSON
-    object with non-empty ``question`` and ``reference`` fields. ``must_include``
-    and ``contexts``, when present, must be lists of strings.
-
-    Args:
-        path: Filesystem path to the ``.jsonl`` dataset.
-
-    Returns:
-        The parsed examples, in file order.
+    Reads and parses line by line without holding the whole file in memory, so a
+    large dataset can be consumed incrementally. Blank lines are skipped; each
+    non-blank line must be a JSON object with non-empty ``question`` and
+    ``reference``.
 
     Raises:
-        DatasetError: If the file is empty, or any line is not valid JSON, is not
-            an object, or is missing required fields.
+        DatasetError: If any line is not valid JSON, is not an object, or is
+            missing required fields.
         FileNotFoundError: If ``path`` does not exist.
     """
-    examples: list[Example] = []
-
     with open(path, encoding="utf-8") as handle:
         for lineno, raw in enumerate(handle, start=1):
             line = raw.strip()
@@ -67,12 +62,56 @@ def load_golden(path: str) -> list[Example]:
             except json.JSONDecodeError as exc:
                 raise DatasetError(f"{path}:{lineno}: invalid JSON: {exc.msg}") from exc
 
-            examples.append(_parse_record(record, path, lineno))
+            yield _parse_record(record, path, lineno)
+
+
+def load_golden(path: str, limit: int | None = None) -> list[Example]:
+    """Load a golden dataset from a JSONL file into a list.
+
+    Args:
+        path: Filesystem path to the ``.jsonl`` dataset.
+        limit: If set, stop after reading this many examples. Useful to smoke-test
+            a huge dataset without parsing all of it.
+
+    Returns:
+        The parsed examples, in file order.
+
+    Raises:
+        DatasetError: If the file has no examples, or any line is malformed.
+        FileNotFoundError: If ``path`` does not exist.
+        ValueError: If ``limit`` is not positive.
+    """
+    if limit is not None and limit <= 0:
+        raise ValueError("limit must be a positive integer")
+
+    examples: list[Example] = []
+    for example in iter_golden(path):
+        examples.append(example)
+        if limit is not None and len(examples) >= limit:
+            break
 
     if not examples:
         raise DatasetError(f"{path}: no examples found (file is empty or all blank)")
 
     return examples
+
+
+def sample_dataset(examples: list[Example], n: int, seed: int = 0) -> list[Example]:
+    """Return a deterministic random sample of ``n`` examples.
+
+    Sampling is seeded so the same ``(dataset, n, seed)`` always yields the same
+    subset — reproducibility is a project invariant. Returns the dataset
+    unchanged (order preserved) when ``n`` is at least its size.
+
+    Raises:
+        ValueError: If ``n`` is not positive.
+    """
+    if n <= 0:
+        raise ValueError("sample size must be a positive integer")
+    if n >= len(examples):
+        return list(examples)
+    rng = random.Random(seed)
+    return rng.sample(examples, n)
 
 
 def _parse_record(record: object, path: str, lineno: int) -> Example:
