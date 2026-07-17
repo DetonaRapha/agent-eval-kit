@@ -1,0 +1,70 @@
+name: Release
+
+# Publishes the package to PyPI when a GitHub Release is published.
+#
+# Uses PyPI Trusted Publishing (OIDC): no long-lived API token is stored. Before
+# the first release, configure the trusted publisher once on PyPI
+# (https://pypi.org/manage/account/publishing/) pointing at this repo, the
+# workflow file `release.yml`, and the `pypi` environment below.
+#
+# Release flow:
+#   1. Bump `version` in pyproject.toml (SemVer) and update CHANGELOG.md.
+#   2. Merge to main, then create a GitHub Release with tag `vX.Y.Z`.
+#   3. This workflow builds and publishes automatically.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Check metadata
+        run: |
+          python -m pip install twine
+          twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # Only publish on an actual release event, not on manual dry-run dispatch.
+    if: github.event_name == 'release'
+    environment:
+      name: pypi
+      url: https://pypi.org/project/agent-eval-kit/
+    permissions:
+      id-token: write # required for Trusted Publishing (OIDC)
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
