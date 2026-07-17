@@ -55,13 +55,22 @@ aponta o kit para o seu próprio sistema sem tocar no código dele. O comando
 imprime um scorecard, escreve `out/report.md` e `out/report.json`, e sai com `0`
 em caso de aprovação / `1` em caso de reprovação — pronto para CI.
 
-### Ligar o juiz Claude de verdade (opcional)
+### Ligar um juiz LLM de verdade (opcional)
+
+O kit traz dois provedores opt-in, cada um atrás do seu extra e com import lazy:
 
 ```bash
+# Claude (Anthropic)
 pip install "agent-eval-kit[anthropic]"
 export ANTHROPIC_API_KEY=sk-...            # nunca comite isso
 python -m agent_eval --dataset examples/golden.jsonl \
   --sut examples.tiny_rag:answer --judge anthropic
+
+# OpenAI
+pip install "agent-eval-kit[openai]"
+export OPENAI_API_KEY=sk-...
+python -m agent_eval --dataset examples/golden.jsonl \
+  --sut examples.tiny_rag:answer --judge openai
 ```
 
 O modelo tem como padrão um modelo Claude atual e é sobrescrevível com
@@ -140,15 +149,37 @@ inventa resposta fora do domínio. Em troca, cai um pouco em `groundedness` e
 esses itens não têm o que "sustentar". É um tradeoff real, e o scorecard o
 expõe — que é exatamente o trabalho de um kit de avaliação.
 
-## Futuro (fora do escopo da v0, de propósito)
+## Recursos avançados
 
-A v0 é a menor fatia completa que roda ponta a ponta. Adiado deliberadamente:
+Além do fluxo básico, o kit oferece:
 
-- UI web / dashboard.
-- Persistência / banco de dados de resultados.
-- Múltiplos provedores de LLM como backend.
-- Datasets grandes ou benchmarks públicos.
-- Concorrência, cache e otimização de custo.
+```bash
+# Datasets grandes: só os N primeiros, ou uma amostra determinística
+python -m agent_eval --dataset big.jsonl --sut m:f --limit 100
+python -m agent_eval --dataset big.jsonl --sut m:f --sample 50 --seed 7
+
+# Concorrência (acelera juízes LLM reais) e cache de veredito
+python -m agent_eval --dataset examples/golden.jsonl --sut m:f \
+  --judge anthropic --concurrency 8 --cache
+
+# Persistência e detecção de regressão entre rodadas (ótimo para CI)
+python -m agent_eval --dataset examples/golden.jsonl --sut m:f \
+  --save-run runs/ --run-name baseline
+python -m agent_eval --dataset examples/golden.jsonl --sut m:f \
+  --baseline runs/baseline.json --regression-tolerance 0.02
+```
+
+Com `--report DIR`, além de `report.md` e `report.json`, é gerado um
+`report.html` autocontido (abre em qualquer navegador, sem servidor).
+
+## Futuro
+
+Ainda deliberadamente fora do escopo:
+
+- Dashboard web completo (o `report.html` cobre o caso simples).
+- Persistência em banco de dados (hoje é arquivo JSON versionado).
+- Benchmarks públicos como adaptadores de dataset.
+- Outros provedores de LLM além de Anthropic e OpenAI.
 
 ## Desenvolvimento
 

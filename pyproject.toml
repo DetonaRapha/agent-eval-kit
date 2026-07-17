@@ -22,8 +22,9 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-# The real Claude judge is opt-in so the SDK is never a required dependency.
+# Real LLM judges are opt-in so no provider SDK is ever a required dependency.
 anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.0"]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -62,9 +63,9 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 python_version = "3.10"
 strict = true
 files = ["agent_eval"]
-# The anthropic SDK is an optional extra; don't fail typing when it's absent.
+# Provider SDKs are optional extras; don't fail typing when they're absent.
 [[tool.mypy.overrides]]
-module = ["anthropic", "anthropic.*"]
+module = ["anthropic", "anthropic.*", "openai", "openai.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]

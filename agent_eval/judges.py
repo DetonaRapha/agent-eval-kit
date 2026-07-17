@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -192,7 +193,7 @@ class AnthropicJudge:
         reference: str,
     ) -> JudgeScores:
         client = self._get_client()
-        prompt = self._build_prompt(question, answer, contexts, reference)
+        prompt = _build_judge_prompt(question, answer, contexts, reference)
 
         message = client.messages.create(  # type: ignore[attr-defined]
             model=self.model,
@@ -200,45 +201,106 @@ class AnthropicJudge:
             system=_RUBRIC,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = _extract_text(message)
-        return self._parse(text)
+        text = _extract_anthropic_text(message)
+        return _parse_judge_scores(text)
 
-    @staticmethod
-    def _build_prompt(question: str, answer: str, contexts: list[str], reference: str) -> str:
-        joined_contexts = "\n".join(f"- {c}" for c in contexts) if contexts else "(none)"
-        return (
-            f"QUESTION:\n{question}\n\n"
-            f"CONTEXTS:\n{joined_contexts}\n\n"
-            f"REFERENCE ANSWER:\n{reference}\n\n"
-            f"ANSWER TO JUDGE:\n{answer}\n"
+
+# Default OpenAI model for the real judge. Overridable via the same env var.
+_DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+
+
+class OpenAIJudge:
+    """LLM-as-judge backed by an OpenAI chat model. Opt-in; SDK imported lazily.
+
+    Mirrors :class:`AnthropicJudge`: same rubric, same JSON contract, same
+    parsing — only the client differs. Requires ``OPENAI_API_KEY`` and the
+    ``openai`` extra (``pip install agent-eval-kit[openai]``). The model is read
+    from ``AGENT_EVAL_JUDGE_MODEL``, defaulting to a small current model.
+    """
+
+    def __init__(self, model: str | None = None, client: object | None = None) -> None:
+        self.model = model or os.environ.get(_MODEL_ENV_VAR, _DEFAULT_OPENAI_MODEL)
+        self._client = client  # injectable for testing; otherwise built lazily
+
+    def _get_client(self) -> object:
+        if self._client is None:
+            try:
+                import openai
+            except ImportError as exc:  # pragma: no cover - depends on optional extra
+                raise RuntimeError(
+                    "OpenAIJudge requires the 'openai' package. Install it with "
+                    "`pip install agent-eval-kit[openai]`, or use the default mock judge."
+                ) from exc
+            self._client = openai.OpenAI()  # reads OPENAI_API_KEY from env
+        return self._client
+
+    def score(
+        self,
+        question: str,
+        answer: str,
+        contexts: list[str],
+        reference: str,
+    ) -> JudgeScores:
+        client = self._get_client()
+        prompt = _build_judge_prompt(question, answer, contexts, reference)
+
+        completion = client.chat.completions.create(  # type: ignore[attr-defined]
+            model=self.model,
+            messages=[
+                {"role": "system", "content": _RUBRIC},
+                {"role": "user", "content": prompt},
+            ],
         )
-
-    @staticmethod
-    def _parse(text: str) -> JudgeScores:
-        payload = _extract_json_object(text)
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"judge did not return valid JSON: {text!r}") from exc
-
-        try:
-            return JudgeScores(
-                faithfulness=_clamp01(float(data["faithfulness"])),
-                relevance=_clamp01(float(data["relevance"])),
-                not_hallucinated=_clamp01(float(data["not_hallucinated"])),
-                rationale=str(data.get("rationale", "")),
-            )
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"judge JSON missing/invalid fields: {payload!r}") from exc
+        text = _extract_openai_text(completion)
+        return _parse_judge_scores(text)
 
 
-def _extract_text(message: object) -> str:
+def _build_judge_prompt(question: str, answer: str, contexts: list[str], reference: str) -> str:
+    """Assemble the user-facing prompt shared by every LLM judge."""
+    joined_contexts = "\n".join(f"- {c}" for c in contexts) if contexts else "(none)"
+    return (
+        f"QUESTION:\n{question}\n\n"
+        f"CONTEXTS:\n{joined_contexts}\n\n"
+        f"REFERENCE ANSWER:\n{reference}\n\n"
+        f"ANSWER TO JUDGE:\n{answer}\n"
+    )
+
+
+def _parse_judge_scores(text: str) -> JudgeScores:
+    """Parse a judge's JSON reply into :class:`JudgeScores`, clamped to [0, 1]."""
+    payload = _extract_json_object(text)
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"judge did not return valid JSON: {text!r}") from exc
+
+    try:
+        return JudgeScores(
+            faithfulness=_clamp01(float(data["faithfulness"])),
+            relevance=_clamp01(float(data["relevance"])),
+            not_hallucinated=_clamp01(float(data["not_hallucinated"])),
+            rationale=str(data.get("rationale", "")),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"judge JSON missing/invalid fields: {payload!r}") from exc
+
+
+def _extract_anthropic_text(message: object) -> str:
     """Pull the text out of an Anthropic Messages API response."""
     content = getattr(message, "content", None)
     if not content:
         return ""
     parts = [getattr(block, "text", "") for block in content]
     return "".join(parts).strip()
+
+
+def _extract_openai_text(completion: object) -> str:
+    """Pull the text out of an OpenAI Chat Completions response."""
+    choices = getattr(completion, "choices", None)
+    if not choices:
+        return ""
+    message = getattr(choices[0], "message", None)
+    return str(getattr(message, "content", "") or "").strip()
 
 
 def _extract_json_object(text: str) -> str:
@@ -254,11 +316,49 @@ def _extract_json_object(text: str) -> str:
     return text[start : end + 1]
 
 
+class CachingJudge:
+    """Wrap a judge and memoize verdicts by (question, answer, contexts, reference).
+
+    LLM judges are the slow, costly part of a run. When the same answer is judged
+    more than once — reruns, duplicate items, retries — caching avoids paying
+    twice. Thread-safe, so it composes with the runner's concurrency.
+    """
+
+    def __init__(self, inner: Judge) -> None:
+        self._inner = inner
+        self._cache: dict[tuple[str, str, tuple[str, ...], str], JudgeScores] = {}
+        self._lock = threading.Lock()
+
+    def score(
+        self,
+        question: str,
+        answer: str,
+        contexts: list[str],
+        reference: str,
+    ) -> JudgeScores:
+        key = (question, answer, tuple(contexts), reference)
+        with self._lock:
+            cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        scores = self._inner.score(question, answer, contexts, reference)
+        with self._lock:
+            self._cache[key] = scores
+        return scores
+
+
+#: Judge names accepted by :func:`make_judge` and the CLI.
+JUDGE_NAMES: tuple[str, ...] = ("mock", "anthropic", "openai")
+
+
 def make_judge(name: str) -> Judge:
-    """Factory: build a judge by name (``"mock"`` or ``"anthropic"``)."""
+    """Factory: build a judge by name (``"mock"``, ``"anthropic"``, ``"openai"``)."""
     normalized = name.strip().casefold()
     if normalized == "mock":
         return MockJudge()
     if normalized == "anthropic":
         return AnthropicJudge()
-    raise ValueError(f"unknown judge {name!r}; expected 'mock' or 'anthropic'")
+    if normalized == "openai":
+        return OpenAIJudge()
+    raise ValueError(f"unknown judge {name!r}; expected one of {', '.join(JUDGE_NAMES)}")

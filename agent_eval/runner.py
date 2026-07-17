@@ -9,10 +9,11 @@ clears the thresholds. The result is a :class:`~agent_eval.scorecard.Scorecard`.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 
 from agent_eval import metrics as m
 from agent_eval.datasets import Example
-from agent_eval.judges import Judge
+from agent_eval.judges import CachingJudge, Judge
 from agent_eval.scorecard import LATENCY_KEY, Row, Scorecard
 from agent_eval.sut import SUT
 
@@ -29,6 +30,8 @@ def evaluate(
     dataset: list[Example],
     judge: Judge,
     thresholds: Mapping[str, float],
+    concurrency: int = 1,
+    cache: bool = False,
 ) -> Scorecard:
     """Run ``sut`` over ``dataset``, grade each item, and aggregate.
 
@@ -38,17 +41,34 @@ def evaluate(
         judge: The judge providing faithfulness/relevance/hallucination scores.
         thresholds: Minimum acceptable mean per metric. Metrics not listed are
             reported but do not affect the pass/fail verdict.
+        concurrency: Number of items to evaluate in parallel. Items are
+            independent, so this speeds up I/O-bound runs (real LLM judges)
+            without changing results — output order and aggregation are
+            deterministic regardless of completion order.
+        cache: If True, memoize judge verdicts so identical (question, answer,
+            contexts, reference) tuples are scored once.
 
     Returns:
         A populated :class:`Scorecard`.
 
     Raises:
-        ValueError: If ``dataset`` is empty.
+        ValueError: If ``dataset`` is empty or ``concurrency`` is not positive.
     """
     if not dataset:
         raise ValueError("cannot evaluate an empty dataset")
+    if concurrency < 1:
+        raise ValueError("concurrency must be a positive integer")
 
-    per_item = [_evaluate_one(sut, judge, example) for example in dataset]
+    if cache:
+        judge = CachingJudge(judge)
+
+    if concurrency == 1:
+        per_item = [_evaluate_one(sut, judge, example) for example in dataset]
+    else:
+        # map() preserves input order, so aggregation stays deterministic.
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            per_item = list(pool.map(lambda ex: _evaluate_one(sut, judge, ex), dataset))
+
     aggregate = _aggregate(per_item)
     thresholds = dict(thresholds)
     passed = _verdict(aggregate, thresholds)
