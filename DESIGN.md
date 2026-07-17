@@ -1,83 +1,87 @@
 # DESIGN — agent-eval-kit
 
-A light RFC for why the kit is shaped the way it is. One page. The interesting
-part is not what it does but what it deliberately does *not* do.
+Um RFC leve sobre por que o kit tem o formato que tem. Uma página. A parte
+interessante não é o que ele faz, mas o que ele deliberadamente *não* faz.
 
-## Context: evaluating an agent is not testing software
+## Contexto: avaliar um agente não é testar software
 
-Normal software testing rests on determinism: input X must produce output Y, so
-you assert equality and move on. LLM systems violate that at the core. The same
-question yields different wording every time, and "different" is not "wrong" — a
-paraphrase can be perfectly correct. `assert answer == expected` therefore either
-flakes constantly or, softened into a substring check, tests almost nothing.
+O teste de software normal se apoia em determinismo: a entrada X precisa produzir
+a saída Y, então você verifica igualdade e segue. Sistemas de LLM violam isso na
+raiz. A mesma pergunta gera um texto diferente toda vez, e "diferente" não é
+"errado" — uma paráfrase pode estar perfeitamente correta. `assert answer ==
+expected` portanto ou fica instável o tempo todo ou, suavizado para uma checagem
+de substring, quase não testa nada.
 
-Quality of a non-deterministic system has to be *measured*, not asserted: score
-each answer against a rubric, aggregate over a representative dataset, and gate on
-the aggregate. That reframes evaluation as a testing layer — a CI-grade quality
-gate — rather than an exploratory notebook. Everything below follows from taking
-that reframing seriously on a small surface.
+A qualidade de um sistema não-determinístico precisa ser *medida*, não afirmada:
+pontuar cada resposta contra uma rubrica, agregar sobre um dataset representativo
+e usar o agregado como portão. Isso reposiciona a avaliação como uma camada de
+teste — um quality gate de nível CI — em vez de um notebook exploratório. Tudo
+abaixo decorre de levar esse reposicionamento a sério numa superfície pequena.
 
-## Decision
+## Decisão
 
-**1. Mock-judge-first.** The default judge is deterministic and LLM-free,
-deriving scores from text overlap. This is the load-bearing decision. It means
-the entire kit — including the "does eval discriminate quality?" test — runs with
-no API key, no network, and identical output on any machine. The real Claude
-judge is an opt-in upgrade behind an environment variable and an optional
-dependency, never a requirement to demonstrate or test the kit. Reproducibility
-is the default; the LLM is the enhancement.
+**1. Mock-judge-first.** O juiz padrão é determinístico e sem LLM, derivando as
+notas de sobreposição de texto. Esta é a decisão que sustenta tudo. Significa que
+o kit inteiro — incluindo o teste de "o eval discrimina qualidade?" — roda sem
+API key, sem rede e com saída idêntica em qualquer máquina. O juiz Claude de
+verdade é um upgrade opt-in, atrás de uma variável de ambiente e de uma
+dependência opcional, nunca um requisito para demonstrar ou testar o kit.
+Reprodutibilidade é o padrão; o LLM é o aprimoramento.
 
-**2. Decoupled SUT contract.** The system under test is any callable
-`question -> SUTResult`. The kit knows nothing about its internals — retrieval,
-prompting, model choice are all opaque. This one-way contract is what makes the
-kit reusable across a RAG, an agent, or a bare LLM call without modification, and
-it is why `--sut module:function` can point at arbitrary user code.
+**2. Contrato de SUT desacoplado.** O sistema sob teste é qualquer callable
+`question -> SUTResult`. O kit não sabe nada sobre os internos dele — recuperação,
+prompting, escolha de modelo são todos opacos. Esse contrato de mão única é o que
+torna o kit reutilizável entre um RAG, um agente ou uma chamada pura de LLM sem
+modificação, e é por isso que `--sut module:function` pode apontar para código
+arbitrário do usuário.
 
-**3. Deterministic metrics *and* a judge, not one or the other.** Deterministic
-metrics (exact match, keyword recall, groundedness proxy) are cheap, fast, and
-utterly stable, but blind to meaning — they can't tell whether an answer is
-*faithful* or merely word-overlapping. The judge captures the semantic axes the
-metrics miss. Neither is sufficient alone; the scorecard reports both and
-thresholds any of them.
+**3. Métricas determinísticas *e* um juiz, não um ou outro.** As métricas
+determinísticas (exact match, keyword recall, groundedness proxy) são baratas,
+rápidas e completamente estáveis, mas cegas ao significado — não conseguem dizer
+se uma resposta é *fiel* ou apenas tem sobreposição de palavras. O juiz captura
+os eixos semânticos que as métricas perdem. Nenhum é suficiente sozinho; o
+scorecard reporta ambos e aplica threshold em qualquer um.
 
-**4. The threshold verdict is the product.** Aggregating scores is a report;
-comparing them to thresholds and exiting non-zero is a *test*. The pass/fail
-verdict surfaced as a process exit code is what lets the kit block bad output in
-CI — that is the difference between a dashboard and a quality gate.
+**4. O veredito por threshold é o produto.** Agregar notas é um relatório;
+compará-las com thresholds e sair com código diferente de zero é um *teste*. O
+veredito pass/fail exposto como exit code do processo é o que permite ao kit
+bloquear saída ruim no CI — essa é a diferença entre um dashboard e um quality
+gate.
 
-## Alternatives considered
+## Alternativas consideradas
 
-- **Use Ragas / DeepEval off the shelf.** Mature and feature-rich, but they pull
-  in heavy dependencies, assume an LLM is always available, and hide the scoring
-  logic behind abstractions. For a kit whose whole point is to *demonstrate*
-  rigorous, reproducible eval on a small surface, an opaque dependency undercuts
-  the message. Rolling a minimal core keeps the scoring auditable and the demo
-  runnable with zero setup. (If this grew past v0, adopting one of them as an
-  optional judge backend would be the natural move — the SUT/judge contracts are
-  designed to allow it.)
+- **Usar Ragas / DeepEval prontos.** Maduros e cheios de recursos, mas puxam
+  dependências pesadas, assumem que um LLM está sempre disponível e escondem a
+  lógica de pontuação atrás de abstrações. Para um kit cujo propósito é
+  *demonstrar* eval rigoroso e reprodutível numa superfície pequena, uma
+  dependência opaca enfraquece a mensagem. Escrever um núcleo mínimo mantém a
+  pontuação auditável e a demo rodável com zero setup. (Se isso crescer além da
+  v0, adotar um deles como backend de juiz opcional seria o passo natural — os
+  contratos de SUT/juiz foram desenhados para permitir isso.)
 
-- **Deterministic metrics only, no judge at all.** Fully reproducible and
-  dependency-free, but it can't measure faithfulness or hallucination in any
-  meaningful sense — the exact axes that matter most for LLM output. That throws
-  away the hardest and most valuable half of the problem.
+- **Só métricas determinísticas, sem juiz nenhum.** Totalmente reprodutível e
+  sem dependências, mas incapaz de medir faithfulness ou alucinação de forma
+  significativa — exatamente os eixos que mais importam para saída de LLM. Isso
+  joga fora a metade mais difícil e mais valiosa do problema.
 
-- **LLM judge only, no mock.** Simpler code, but every clone, test, and CI run
-  would need an API key and network, and results would drift run to run. That
-  fails the reproducibility bar the whole project is trying to model.
+- **Só juiz LLM, sem mock.** Código mais simples, mas todo clone, teste e rodada
+  de CI precisaria de API key e rede, e os resultados variariam de rodada para
+  rodada. Isso falha na barra de reprodutibilidade que o projeto inteiro tenta
+  modelar.
 
-## Tradeoff — what was chosen and what was given up
+## Tradeoff — o que foi escolhido e do que se abriu mão
 
-The choice is **control, reproducibility, and pedagogy over out-of-the-box
-breadth**. The mock judge's scores are heuristic and not accurate in absolute
-terms — they are stable and *discriminating*, which is what a quality gate needs,
-but they are not a substitute for the real judge's semantic understanding.
-Deterministic metrics are shallow by construction. And by staying dependency-free
-in the core, the kit reimplements a sliver of what mature frameworks already
-offer.
+A escolha é **controle, reprodutibilidade e didática acima de amplitude
+out-of-the-box**. As notas do juiz mock são heurísticas e não precisas em termos
+absolutos — são estáveis e *discriminantes*, que é o que um quality gate precisa,
+mas não substituem o entendimento semântico do juiz de verdade. As métricas
+determinísticas são rasas por construção. E, ao permanecer sem dependências no
+núcleo, o kit reimplementa uma fatia do que frameworks maduros já oferecem.
 
-What is bought with those concessions: a repo that clones and runs in one
-command, a test suite that proves the eval discriminates good from bad without any
-external service, and scoring logic small enough to read top to bottom. On a v0
-whose job is to prove the *idea* of eval-as-a-testing-layer, that trade is the
-point — sophistication here is clarity and rigor on a small surface, not size.
-The "why not the other way" above is the actual deliverable.
+O que se compra com essas concessões: um repo que clona e roda em um comando, uma
+suíte de testes que prova que o eval discrimina bom de ruim sem nenhum serviço
+externo, e uma lógica de pontuação pequena o bastante para ser lida de ponta a
+ponta. Numa v0 cujo trabalho é provar a *ideia* de eval-como-camada-de-teste,
+esse trade é o ponto — sofisticação aqui é clareza e rigor numa superfície
+pequena, não tamanho. O "por que não de outro jeito" acima é o verdadeiro
+entregável.
