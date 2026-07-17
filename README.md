@@ -10,6 +10,40 @@ chamada pura de LLM — e receba de volta um **scorecard de qualidade**
 (faithfulness, relevância, detecção de alucinação, mais métricas
 determinísticas) com um **veredito pass/fail** que você pluga direto no CI.
 
+## Por que agora
+
+Estamos na maior corrida de adoção de software da década. O mercado de IA
+generativa deve saltar de ~US$ 21 bi (2024) para mais de **US$ 130 bi até 2030**,
+crescendo a um CAGR próximo de **35%** ([MarketsandMarkets][mm]). A adoção já é
+massiva: **71% das empresas** usam IA generativa em pelo menos uma função de
+negócio ([McKinsey][mck]).
+
+Mas há um detalhe que define este projeto. Conforme a IA entra em produção, a
+maior preocupação das empresas deixou de ser custo ou segurança e passou a ser
+**precisão**: **74% das organizações** apontam a inexatidão como o principal
+risco de IA — à frente de cibersegurança ([McKinsey][mck]). E não é exagero:
+benchmarks de alucinação em LLMs comerciais variam de **~15% a mais de 50%**
+dependendo da tarefa ([levantamento de mercado][hall]).
+
+O problema técnico por trás disso: **não se testa saída não-determinística com
+`assert`**. Um LLM responde diferente a cada chamada, e "diferente" não é
+"errado". Por isso avaliação (eval) virou uma disciplina própria — o mercado de
+ferramentas de LLMOps e observabilidade de IA já é estimado na casa dos bilhões
+e cresce a **20–36% ao ano** ([LLMOps][llmops]; [observabilidade de LLM][obs]).
+
+> **É aqui que o agent-eval-kit entra:** transformar "eu confio que o modelo
+> está bom" num número reprodutível que passa ou reprova no CI — sem precisar de
+> API key para demonstrar.
+
+<sub>Estimativas de mercado variam entre analistas; os números acima são ordens
+de grandeza, com as fontes linkadas.</sub>
+
+[mm]: https://www.globenewswire.com/news-release/2024/05/09/2878906/0/en/Generative-AI-Market-worth-136-7-billion-by-2030-growing-at-a-CAGR-of-36-7-Report-by-MarketsandMarkets.html
+[mck]: https://www.index.dev/blog/llm-enterprise-adoption-statistics
+[hall]: https://sqmagazine.co.uk/llm-hallucination-statistics/
+[llmops]: https://natlawreview.com/press-releases/llmops-software-market-reach-1559-billion-2030-growing-216-cagr
+[obs]: https://dataintelo.com/report/llm-observability-platform-market
+
 ## Por que isso existe
 
 O teste tradicional assume uma saída determinística: dada a entrada X, verifique
