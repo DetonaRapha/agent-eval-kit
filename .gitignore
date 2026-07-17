@@ -1,0 +1,33 @@
+# Secrets — never commit API keys
+.env
+.env.*
+!.env.example
+
+# Reports produced by runs
+out/
+*.report.md
+*.report.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

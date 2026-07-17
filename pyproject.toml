@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-eval-kit"
+version = "0.1.0"
+description = "Evaluation toolkit for LLM agents: golden datasets, LLM-as-judge, and automated quality scorecards."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+keywords = ["llm", "evaluation", "eval", "agent", "rag", "llm-as-judge", "testing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+]
+
+# Core has zero runtime dependencies: the mock-judge path must run anywhere.
+dependencies = []
+
+[project.optional-dependencies]
+# The real Claude judge is opt-in so the SDK is never a required dependency.
+anthropic = ["anthropic>=0.40"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+agent-eval = "agent_eval.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/raphaela97/agent-eval-kit"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_eval"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
