@@ -57,7 +57,16 @@ jobs:
       # no ANTHROPIC_API_KEY, no network, reproducible everywhere.
       # Integration tests are opt-in and stay skipped here (see pyproject addopts).
       - name: Run tests with coverage
-        run: pytest --cov=agent_eval --cov-report=term-missing --cov-fail-under=85
+        run: pytest --cov=agent_eval --cov-report=term-missing --cov-report=xml --cov-fail-under=85
+
+      # Upload once (from a single matrix leg) to Codecov. Tokenless for public
+      # repos; never blocks the build.
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
 
       # Prove the end-to-end CLI path and its exit code, not just unit tests.
       - name: Smoke-test the CLI

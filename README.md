@@ -1,7 +1,7 @@
 # agent-eval-kit
 
 [![CI](https://github.com/DetonaRapha/agent-eval-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/DetonaRapha/agent-eval-kit/actions/workflows/ci.yml)
-![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25-brightgreen)
+[![codecov](https://codecov.io/gh/DetonaRapha/agent-eval-kit/branch/main/graph/badge.svg)](https://codecov.io/gh/DetonaRapha/agent-eval-kit)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
@@ -176,6 +176,9 @@ pytest -m integration
 
 Sem a key, eles são pulados — o CI continua offline e verde. Lint, tipos e o piso
 de cobertura são aplicados como gate no CI.
+
+Veja [CONTRIBUTING.md](CONTRIBUTING.md) para o fluxo de contribuição e
+[CHANGELOG.md](CHANGELOG.md) para o histórico de versões.
 
 ## Licença
 

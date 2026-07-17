@@ -3,8 +3,10 @@
 .env.*
 !.env.example
 
-# Specs are kept local only, never pushed to the remote (team policy).
+# Specs and the internal engineering workflow are kept local only,
+# never pushed to the remote (team policy).
 agent-eval-kit-SPEC*.md
+WORKFLOW_IMPLEMENTACAO.md
 
 # Reports produced by runs
 out/
